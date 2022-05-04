@@ -1,0 +1,99 @@
+version: '3'
+services:
+
+  #Nginx Service
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    tty: true
+    ports:
+#      - "8080:8080"
+      - 80:80
+#      - "443:443"
+    volumes:
+      - ./backend:/var/www/backend
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+    depends_on:
+      - php
+      - nuxt
+    networks:
+      - app-network
+
+  #PHP Service
+  php:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    image: digitalocean.com/php
+    container_name: php
+    restart: unless-stopped
+    tty: true
+    environment:
+      SERVICE_NAME: php
+      SERVICE_TAGS: dev
+    working_dir: /var/www/backend
+    volumes:
+       - ./backend:/var/www/backend
+       - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    links:
+      - db
+      - redis
+    depends_on:
+      - db
+      - redis
+    networks:
+      - app-network
+
+  #Nuxt
+  nuxt:
+    build:
+      context: .
+      dockerfile: docker/nuxt/Dockerfile
+    container_name: nuxt
+    volumes:
+      - ./frontend:/frontend
+#      - /src/node_modules
+    ports:
+      - 8080:8080
+    command: [ "yarn", "dev" ]
+    networks:
+      - app-network
+
+  #MySQL Service
+  db:
+    image: mysql:5.7.22
+    container_name: mysql
+    restart: always
+    tty: true
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: root
+      MYSQL_PASSWORD:
+      MYSQL_ROOT_PASSWORD:
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/my.cnf
+    networks:
+      - app-network
+
+  redis:
+    image: library/redis:latest
+    ports:
+      - 6379:6379
+    networks:
+      - app-network
+
+#Docker Networks
+networks:
+  app-network:
+    driver: bridge
+
+#Volumes
+volumes:
+  dbdata:
+    driver: local
